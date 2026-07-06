@@ -2,26 +2,30 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-
-const platforms = [
+import { Provider } from "@/generated/prisma/enums";
+const platforms: {
+  name: string;
+  provider: Provider;
+  href: string;
+}[] = [
   {
     name: "YouTube",
-    provider: "YOUTUBE",
+    provider: Provider.YOUTUBE,
     href: "/api/youtube/connect",
   },
   {
     name: "Instagram",
-    provider: "INSTAGRAM",
+    provider: Provider.INSTAGRAM,
     href: "/api/instagram/connect",
   },
   {
     name: "LinkedIn",
-    provider: "LINKEDIN",
+    provider: Provider.LINKEDIN,
     href: "/api/linkedin/connect",
   },
   {
     name: "X (Twitter)",
-    provider: "X",
+    provider: Provider.X,
     href: "/api/x/connect",
   },
 ];
