@@ -42,7 +42,7 @@ export default async function Home() {
       email: session.user.email,
     },
     include: {
-      socialAccounts: true,
+      socialAccounts: true,    //
     },
   });
 
