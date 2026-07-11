@@ -7,26 +7,16 @@ datasource db {
   provider = "postgresql"
 }
 
-enum Provider {
-  YOUTUBE
-  INSTAGRAM
-  LINKEDIN
-  X
-}
-
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  accounts      Account[]
-  sessions      Session[]
-
+  id             String          @id @default(cuid())
+  email          String          @unique
+  name           String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  emailVerified  DateTime?
+  image          String?
+  accounts       Account[]
+  sessions       Session[]
   socialAccounts SocialAccount[]
 }
 
@@ -35,47 +25,36 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-
-  refresh_token String?
-  access_token  String?
-  expires_at    Int?
-  token_type    String?
-  scope         String?
-  id_token      String?
-  session_state String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([provider, providerAccountId])
 }
 
 model Session {
-  sessionToken String   @unique
+  sessionToken String   @id @unique
   userId       String
   expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([sessionToken])
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model SocialAccount {
-  id String @id @default(cuid())
-
-  provider Provider
-
+  id             String    @id @default(cuid())
+  provider       Provider
   providerUserId String
-
-  accessToken String
-  refreshToken String?
-
-  expiresAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken    String
+  refreshToken   String?
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerUserId])
 }
@@ -86,4 +65,11 @@ model VerificationToken {
   expires    DateTime
 
   @@id([identifier, token])
+}
+
+enum Provider {
+  YOUTUBE
+  INSTAGRAM
+  LINKEDIN
+  X
 }
