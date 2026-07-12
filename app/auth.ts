@@ -15,6 +15,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (!existingUser) {
         await prisma.user.create({
           data: {
+            id: user.id,
             name: user.name,
             email: user.email,
             image: user.image,
