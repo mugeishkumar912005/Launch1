@@ -37,7 +37,7 @@ export async function GET(request: Request) {
           client_id: process.env.AUTH_GOOGLE_ID!,
           client_secret: process.env.AUTH_GOOGLE_SECRET!,
           code,
-          redirect_uri: "http://localhost:3000/api/youtube/callback",
+          redirect_uri: "https://launch-cli.vercel.app/api/youtube/callback",
           grant_type: "authorization_code",
         }),
       }
