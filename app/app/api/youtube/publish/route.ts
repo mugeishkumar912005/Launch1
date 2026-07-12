@@ -7,14 +7,14 @@ export async function getYoutubeAccessToken() {
 
   console.log(session, "Session in helper");
 
-  if (!session?.user?.email) {
-    console.log("No email found in session");
+  if (!session?.user?.id) {
+    console.log("No id found in session");
     throw new Error("Unauthorized");
   }
 
   const account = await prisma.socialAccount.findFirst({
     where: {
-      email: session?.user?.email,
+      userId: session?.user?.id,
       provider: "YOUTUBE",
     },
   });
