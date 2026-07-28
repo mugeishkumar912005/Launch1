@@ -32,6 +32,7 @@ export default function RootLayout({
           <ul className="flex gap-10 justify-center py-4">
             <li><a href="/">Home</a></li>
             <li><a href="/post">Post</a></li>
+            <li><a href="/handles">Handles</a></li>
           </ul>
         </nav>
         <main className="flex-grow">{children}</main>

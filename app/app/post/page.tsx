@@ -6,6 +6,7 @@ import Preview from "../postComponents/preview";
 
 export default function PostPage() {
   const [content, setContent] = useState("");
+  const [media, setMedia] = useState<File | null>(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
 
   return (
@@ -35,12 +36,7 @@ export default function PostPage() {
             />
           </div>
 
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Upload Media</label>
-            <div className="flex h-44 items-center justify-center rounded-lg border-2 border-dashed">
-              Upload Image / Video
-            </div>
-          </div>
+          <input type="file" onChange={(e) => setMedia(e.target.files?.[0] || null)} />
 
           <input type="datetime-local" className="w-full rounded-lg border p-3" />
 
@@ -57,17 +53,29 @@ export default function PostPage() {
           selectedPlatforms={selectedPlatforms}
         />
       </div>
-    <button
+<button
   onClick={async () => {
+    if (!media) {
+      alert("Please select a video");
+      return;
+    }
+
+    const formData = new FormData();
+
+    formData.append("video", media);
+    formData.append("content", content);
+
     const res = await fetch("/api/youtube/publish", {
-  method: "POST",
-});
+      method: "POST",
+      body: formData,
+    });
 
-const text = await res.text();
+    const data = await res.json();
 
-console.log("Status:", res.status);
-console.log("Response:", text);
+    console.log("Status:", res.status);
+    console.log("Response:", data);
   }}
+  className="rounded-lg bg-red-600 px-5 py-3 text-white"
 >
   Test Publish
 </button>
