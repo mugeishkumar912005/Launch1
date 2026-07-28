@@ -1,71 +1,109 @@
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import cloudinary from "@/lib/cloudinary";
 
-export async function getYoutubeAccessToken() {
-  console.log("helper called");
-  const session = await auth();
+export const runtime = "nodejs";
 
-if (!session?.user?.email) {
-  throw new Error("Unauthorized");
-}
+/**
+ * Get the YouTube access token for the account that
+ * automated publishing should use.
+ */
+async function getYoutubeAccessToken() {
+  const email = process.env.YOUTUBE_PUBLISH_USER_EMAIL;
 
-const user = await prisma.user.findUnique({
-  where: {
-    email: session.user.email,
-  },
-});
+  if (!email) {
+    throw new Error(
+      "YOUTUBE_PUBLISH_USER_EMAIL environment variable is missing"
+    );
+  }
 
-if (!user) {
-  throw new Error("User not found");
-}
-console.log("UUser found now finding account...");
-const account = await prisma.socialAccount.findFirst({
-  where: {
-    userId: user.id,
-    provider: "YOUTUBE",
-  },
-});
-console.log("Account found:", account);
-if (!account) {
-  throw new Error("YouTube account not connected");
-}
+  const user = await prisma.user.findUnique({
+    where: {
+      email,
+    },
+  });
 
-  // Access token still valid
+  if (!user) {
+    throw new Error("Publishing user not found");
+  }
+
+  const account = await prisma.socialAccount.findFirst({
+    where: {
+      userId: user.id,
+      provider: "YOUTUBE",
+    },
+  });
+
+  if (!account) {
+    throw new Error("YouTube account not connected");
+  }
+
+  // Access token is still valid
   if (
+    account.accessToken &&
     account.expiresAt &&
     account.expiresAt > new Date()
   ) {
     return account.accessToken;
   }
-  console.log("Access token expired, refreshing...");
-  // Refresh Access Token
-const response = await fetch("https://oauth2.googleapis.com/token", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/x-www-form-urlencoded",
-  },
-  body: new URLSearchParams({
-    client_id: process.env.AUTH_GOOGLE_ID!,
-    client_secret: process.env.AUTH_GOOGLE_SECRET!,
-    refresh_token: account.refreshToken!,
-    grant_type: "refresh_token",
-  }),
-});
+
+  if (!account.refreshToken) {
+    throw new Error("YouTube refresh token missing");
+  }
+
+  console.log("Access token expired. Refreshing...");
+
+  const response = await fetch(
+    "https://oauth2.googleapis.com/token",
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type":
+          "application/x-www-form-urlencoded",
+      },
+
+      body: new URLSearchParams({
+        client_id:
+          process.env.AUTH_GOOGLE_ID!,
+
+        client_secret:
+          process.env.AUTH_GOOGLE_SECRET!,
+
+        refresh_token:
+          account.refreshToken,
+
+        grant_type:
+          "refresh_token",
+      }),
+    }
+  );
+
   const token = await response.json();
 
-  console.log("New access token:", token);
-
   if (!response.ok) {
-    throw new Error("Failed to refresh access token");
+    console.error(
+      "Token refresh error:",
+      token
+    );
+
+    throw new Error(
+      "Failed to refresh YouTube access token"
+    );
   }
 
   await prisma.socialAccount.update({
     where: {
       id: account.id,
     },
+
     data: {
-      accessToken: token.access_token,
-      expiresAt: new Date(Date.now() + token.expires_in * 1000),
+      accessToken:
+        token.access_token,
+
+      expiresAt: new Date(
+        Date.now() +
+          token.expires_in * 1000
+      ),
     },
   });
 
@@ -73,143 +111,321 @@ const response = await fetch("https://oauth2.googleapis.com/token", {
 }
 
 
-export async function POST(request: Request) {
-  try {
-    console.log("Publishing video...");
+/**
+ * Publish ONE Cloudinary video to YouTube.
+ */
+async function publishVideo(
+  video: any,
+  accessToken: string
+) {
+  console.log(
+    "Fetching from Cloudinary:",
+    video.secure_url
+  );
 
-    // Get valid YouTube access token
-    const accessToken = await getYoutubeAccessToken();
-    
-    console.log("Access token:", accessToken);
+  // ----------------------------------------
+  // GET VIDEO FROM CLOUDINARY
+  // ----------------------------------------
 
-    // Get FormData
-    const formData = await request.formData();
+  const cloudResponse = await fetch(
+    video.secure_url
+  );
 
-    console.log("Form data received");
+  if (!cloudResponse.ok) {
+    throw new Error(
+      `Failed to fetch ${video.public_id} from Cloudinary`
+    );
+  }
 
-    const video = formData.get("video") as File | null;
-    const content = formData.get("content") as string | null;
+  const videoBuffer =
+    await cloudResponse.arrayBuffer();
 
-    if (!video) {
-      return Response.json(
-        {
-          success: false,
-          error: "Video is required",
+  const videoType =
+    cloudResponse.headers.get(
+      "content-type"
+    ) || "video/mp4";
+
+  console.log(
+    "Video size:",
+    videoBuffer.byteLength
+  );
+
+  // ----------------------------------------
+  // INITIALIZE YOUTUBE RESUMABLE UPLOAD
+  // ----------------------------------------
+
+  const initResponse = await fetch(
+    "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+    {
+      method: "POST",
+
+      headers: {
+        Authorization:
+          `Bearer ${accessToken}`,
+
+        "Content-Type":
+          "application/json",
+
+        "X-Upload-Content-Type":
+          videoType,
+
+        "X-Upload-Content-Length":
+          videoBuffer.byteLength.toString(),
+      },
+
+      body: JSON.stringify({
+        snippet: {
+          title:
+            video.display_name ||
+            video.public_id
+              .split("/")
+              .pop() ||
+            "Untitled Video",
+
+          description: "",
         },
-        {
-          status: 400,
-        }
-      );
+
+        status: {
+          privacyStatus: "public",
+        },
+      }),
     }
+  );
 
-    console.log("Video:", video.name);
-    console.log("Video type:", video.type);
-    console.log("Video size:", video.size);
-    console.log("Content:", content);
+  if (!initResponse.ok) {
+    const error =
+      await initResponse.text();
 
-    // Create YouTube resumable upload session
-    const initResponse = await fetch(
-      "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
-      {
-        method: "POST",
-
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          "X-Upload-Content-Type": video.type,
-          "X-Upload-Content-Length": video.size.toString(),
-        },
-
-        body: JSON.stringify({
-          snippet: {
-            title: content || "Untitled Video",
-            description: content || "",
-          },
-
-          status: {
-            // Keep private while testing
-            privacyStatus: "private",
-          },
-        }),
-      }
+    console.error(
+      "YouTube init error:",
+      error
     );
 
-    // Check initialization error
-    if (!initResponse.ok) {
-      const error = await initResponse.text();
+    throw new Error(
+      `Failed to initialize YouTube upload: ${error}`
+    );
+  }
 
-      console.error("YouTube init error:", error);
+  const uploadUrl =
+    initResponse.headers.get(
+      "location"
+    );
 
-      return Response.json(
-        {
-          success: false,
-          error: "Failed to initialize YouTube upload",
-          details: error,
-        },
-        {
-          status: initResponse.status,
-        }
-      );
-    }
+  if (!uploadUrl) {
+    throw new Error(
+      "YouTube did not return upload URL"
+    );
+  }
 
-    // YouTube gives us the upload URL
-    const uploadUrl = initResponse.headers.get("location");
+  console.log(
+    "YouTube upload session created"
+  );
 
-    if (!uploadUrl) {
-      throw new Error("YouTube did not return an upload URL");
-    }
+  // ----------------------------------------
+  // UPLOAD VIDEO
+  // ----------------------------------------
 
-    console.log("Upload session created");
-
-    // Get actual video bytes
-    const videoBuffer = await video.arrayBuffer();
-
-    console.log("Uploading video to YouTube...");
-
-    // Upload video
-    const uploadResponse = await fetch(uploadUrl, {
+  const uploadResponse =
+    await fetch(uploadUrl, {
       method: "PUT",
 
       headers: {
-        "Content-Type": video.type || "video/mp4",
-        "Content-Length": videoBuffer.byteLength.toString(),
+        "Content-Type":
+          videoType,
+
+        "Content-Length":
+          videoBuffer.byteLength.toString(),
       },
 
       body: videoBuffer,
     });
 
-    const result = await uploadResponse.json();
+  const youtubeResult =
+    await uploadResponse.json();
 
-    // Check upload error
-    if (!uploadResponse.ok) {
-      console.error("YouTube upload error:", result);
+  if (!uploadResponse.ok) {
+    console.error(
+      "YouTube upload error:",
+      youtubeResult
+    );
 
-      return Response.json(
-        {
-          success: false,
-          error: "YouTube upload failed",
-          details: result,
-        },
-        {
-          status: uploadResponse.status,
-        }
-      );
+    throw new Error(
+      "YouTube video upload failed"
+    );
+  }
+
+  console.log(
+    "YouTube upload successful:",
+    youtubeResult.id
+  );
+
+  // ----------------------------------------
+  // DELETE FROM CLOUDINARY
+  // ONLY AFTER YOUTUBE SUCCESS
+  // ----------------------------------------
+
+  const deleteResult =
+    await cloudinary.uploader.destroy(
+      video.public_id,
+      {
+        resource_type: "video",
+        invalidate: true,
+      }
+    );
+
+  console.log(
+    "Cloudinary deletion:",
+    video.public_id,
+    deleteResult
+  );
+
+  return {
+    success: true,
+    youtubeVideoId:
+      youtubeResult.id,
+    cloudinaryPublicId:
+      video.public_id,
+    cloudinaryDeleteResult:
+      deleteResult.result,
+  };
+}
+
+
+/**
+ * Called automatically by Vercel Cron.
+ */
+export async function GET() {
+  try {
+    console.log(
+      "Starting scheduled YouTube publishing..."
+    );
+
+    // ----------------------------------------
+    // GET ACCESS TOKEN
+    // ----------------------------------------
+
+    const accessToken =
+      await getYoutubeAccessToken();
+
+    // ----------------------------------------
+    // GET CLOUDINARY VIDEOS
+    // ----------------------------------------
+
+    const cloudVideos =
+      await cloudinary.api.resources({
+        resource_type: "video",
+        type: "upload",
+
+        prefix:
+          "scheduled-videos/",
+
+        max_results: 100,
+      });
+
+    const videos =
+      cloudVideos.resources || [];
+
+    console.log(
+      "Cloudinary videos found:",
+      videos.length
+    );
+
+    if (!videos.length) {
+      return Response.json({
+        success: true,
+        message:
+          "No videos waiting to be published",
+        published: 0,
+      });
     }
 
-    console.log("YouTube upload successful");
-    console.log("Video ID:", result.id);
+    // ----------------------------------------
+    // PUBLISH VIDEOS
+    // ----------------------------------------
+
+    const results = [];
+
+    // Sequential deliberately:
+    // video 1 finishes before video 2 starts.
+    for (const video of videos) {
+      try {
+        console.log(
+          "Publishing:",
+          video.public_id
+        );
+
+        const result =
+          await publishVideo(
+            video,
+            accessToken
+          );
+
+        results.push(result);
+
+      } catch (error) {
+
+        console.error(
+          `Failed ${video.public_id}:`,
+          error
+        );
+
+        // IMPORTANT:
+        // Failed video stays in Cloudinary.
+
+        results.push({
+          success: false,
+
+          cloudinaryPublicId:
+            video.public_id,
+
+          error:
+            error instanceof Error
+              ? error.message
+              : "Unknown error",
+        });
+      }
+    }
+
+    // ----------------------------------------
+    // FINAL RESULT
+    // ----------------------------------------
+
+    const published =
+      results.filter(
+        (result) =>
+          result.success
+      ).length;
+
+    const failed =
+      results.filter(
+        (result) =>
+          !result.success
+      ).length;
 
     return Response.json({
       success: true,
-      message: "Video uploaded successfully",
-      videoId: result.id,
+
+      total:
+        videos.length,
+
+      published,
+
+      failed,
+
+      results,
     });
+
   } catch (error) {
-    console.error("Publish error:", error);
+
+    console.error(
+      "Scheduled publishing failed:",
+      error
+    );
 
     return Response.json(
       {
         success: false,
+
         error:
           error instanceof Error
             ? error.message

@@ -1,23 +1,60 @@
 import { execFile } from "child_process";
-import { request } from "https";
 import { promisify } from "util";
+import { unlink } from "fs/promises";
+import cloudinary from "@/lib/cloudinary"; // ← adjust to wherever your cloudinary.ts lives
 
 export const runtime = "nodejs";
 
 const run = promisify(execFile);
 
-export async function POST(request:Request) {
+function durationToSeconds(duration: string): number {
+  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return 0;
+  const hours = Number(match[1] ?? 0);
+  const minutes = Number(match[2] ?? 0);
+  const seconds = Number(match[3] ?? 0);
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+async function downloadAndUpload(video: any) {
+  const { stdout } = await run("yt-dlp", [
+    video.videoId,
+    "-o", "downloads/%(id)s.%(ext)s",
+    "--no-playlist",
+    "--no-simulate",
+    "--print", "after_move:filepath",
+    "--quiet",
+    "--no-warnings",
+  ]);
+
+  const filePath = stdout.trim().split("\n").pop()?.trim();
+  if (!filePath) throw new Error("Could not determine downloaded file path");
+
+  try {
+    const result = await cloudinary.uploader.upload(filePath, {
+      resource_type: "video", // required — Cloudinary handles video vs image differently
+      folder: "trending-shorts",
+      public_id: video.videoId,
+      overwrite: true,
+    });
+    return result.secure_url as string;
+  } finally {
+    await unlink(filePath).catch(() => {}); // remove the local temp copy
+  }
+}
+
+export async function POST(request: Request) {
   try {
     const { Ids } = await request.json();
 
-    console.log("IDS",Ids)
+    console.log("IDS", Ids);
 
-    const channelId = Ids.channels.map((id:any) => {
-      console.log("ID",id)
+    const channelId = Ids.channels.map((id: any) => {
+      console.log("ID", id);
       return id.channelId;
-    })
+    });
 
-    console.log(channelId)
+    console.log(channelId);
     const apiKey = process.env.YOUTUBE_API_KEY;
 
     if (!apiKey) {
@@ -26,8 +63,9 @@ export async function POST(request:Request) {
 
     const publishedAfter = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    channelId.map(async(Id:any) => {
-    
+    const rankedVideos: any[] = [];
+
+    for (const Id of channelId) {
       const searchParams = new URLSearchParams({
         part: "snippet",
         channelId: Id,
@@ -38,67 +76,44 @@ export async function POST(request:Request) {
         publishedAfter,
         key: apiKey,
       });
-  
+
       const searchResponse = await fetch(
         `https://www.googleapis.com/youtube/v3/search?${searchParams}`
       );
       const searchData = await searchResponse.json();
-  
+
       if (!searchResponse.ok) {
         console.error("YouTube search error:", searchData);
-        return Response.json({ success: false, error: searchData }, { status: searchResponse.status });
+        continue;
       }
-  
-      if (!searchData.items?.length) {
-        return Response.json(
-          { success: false, error: "No recent short videos found" },
-          { status: 404 }
-        );
-      }
-  
+
+      if (!searchData.items?.length) continue;
+
       const videoIds = searchData.items
         .map((item: any) => item.id?.videoId)
         .filter(Boolean);
-  
-      if (!videoIds.length) {
-        return Response.json(
-          { success: false, error: "No valid video IDs found" },
-          { status: 404 }
-        );
-      }
+
+      if (!videoIds.length) continue;
+
       const statsParams = new URLSearchParams({
         part: "snippet,statistics,contentDetails",
         id: videoIds.join(","),
         key: apiKey,
       });
-  
+
       const statsResponse = await fetch(
         `https://www.googleapis.com/youtube/v3/videos?${statsParams}`
       );
       const statsData = await statsResponse.json();
-  
+
       if (!statsResponse.ok) {
         console.error("YouTube statistics error:", statsData);
-        return Response.json({ success: false, error: statsData }, { status: statsResponse.status });
+        continue;
       }
-  
-      if (!statsData.items?.length) {
-        return Response.json(
-          { success: false, error: "Video statistics not found" },
-          { status: 404 }
-        );
-      }
-  
-      function durationToSeconds(duration: string): number {
-        const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-        if (!match) return 0;
-        const hours = Number(match[1] ?? 0);
-        const minutes = Number(match[2] ?? 0);
-        const seconds = Number(match[3] ?? 0);
-        return hours * 3600 + minutes * 60 + seconds;
-      }
-  
-      const rankedVideos = statsData.items
+
+      if (!statsData.items?.length) continue;
+
+      const ranked = statsData.items
         .map((video: any) => {
           const views = Number(video.statistics?.viewCount ?? 0);
           const likes = Number(video.statistics?.likeCount ?? 0);
@@ -110,7 +125,7 @@ export async function POST(request:Request) {
           const likeRate = views > 0 ? likes / views : 0;
           const commentRate = views > 0 ? comments / views : 0;
           const trendingScore = viewsPerHour * (1 + likeRate + commentRate * 5);
-  
+
           return {
             videoId: video.id,
             title: video.snippet.title,
@@ -131,42 +146,29 @@ export async function POST(request:Request) {
             trendingScore: Math.round(trendingScore),
           };
         })
-        .filter((video: any) => video.durationSeconds > 0 && video.durationSeconds <= 180)
-        .sort((a: any, b: any) => b.trendingScore - a.trendingScore);
-  
-      if (!rankedVideos.length) {
-        return Response.json(
-          { success: false, error: "No Short candidates found" },
-          { status: 404 }
-        );
-      }
-  
-      const trendingVideo = rankedVideos[0];
-      console.log("Selected trending video:", trendingVideo);
-      await run("yt-dlp", [trendingVideo.videoId, "-o", "downloads/%(title)s.%(ext)s"]);
-  
-      return Response.json({
-        success: true,
-        video: {
-          videoId: trendingVideo.videoId,
-          title: trendingVideo.title,
-          description: trendingVideo.description,
-          channelName: trendingVideo.channelName,
-          publishedAt: trendingVideo.publishedAt,
-          thumbnail: trendingVideo.thumbnail,
-          duration: trendingVideo.duration,
-          durationSeconds: trendingVideo.durationSeconds,
-          views: trendingVideo.views,
-          likes: trendingVideo.likes,
-          comments: trendingVideo.comments,
-          ageHours: trendingVideo.ageHours,
-          viewsPerHour: trendingVideo.viewsPerHour,
-          trendingScore: trendingVideo.trendingScore,
-        },
-      });
+        .filter((video: any) => video.durationSeconds > 0 && video.durationSeconds <= 180);
+
+      rankedVideos.push(...ranked);
+    }
+
+    rankedVideos.sort((a: any, b: any) => b.trendingScore - a.trendingScore);
+
+    if (!rankedVideos.length) {
+      return Response.json(
+        { success: false, error: "No Short candidates found" },
+        { status: 404 }
+      );
+    }
+
+    const trendingVideo = rankedVideos[0];
+    console.log("Selected trending video:", trendingVideo);
+
+    const cloudinaryUrl = await downloadAndUpload(trendingVideo);
+
+    return Response.json({
+      success: true,
+      video: { ...trendingVideo, cloudinaryUrl },
     });
-
-
   } catch (error) {
     console.error("Trending video selection failed:", error);
     return Response.json(
