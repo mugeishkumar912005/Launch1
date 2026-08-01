@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import cloudinary from "@/lib/cloudinary";
+import { toast } from "sonner";
 
 export const runtime = "nodejs";
 
@@ -278,7 +279,7 @@ async function publishVideo(
     video.public_id,
     deleteResult
   );
-
+  toast.success("Successfully deleted video from Cloudinary");
   return {
     success: true,
     youtubeVideoId:
@@ -315,9 +316,10 @@ export async function GET() {
       await cloudinary.api.resources({
         resource_type: "video",
         type: "upload",
+      
 
         prefix:
-          "scheduled-videos/",
+          "Personal/",
 
         max_results: 100,
       });
@@ -329,7 +331,7 @@ export async function GET() {
       "Cloudinary videos found:",
       videos.length
     );
-
+    toast.success("Successfully fetched Cloudinary video");
     if (!videos.length) {
       return Response.json({
         success: true,
@@ -343,80 +345,50 @@ export async function GET() {
     // PUBLISH VIDEOS
     // ----------------------------------------
 
-    const results = [];
+    const video = videos[0];
 
-    // Sequential deliberately:
-    // video 1 finishes before video 2 starts.
-    for (const video of videos) {
-      try {
-        console.log(
-          "Publishing:",
-          video.public_id
-        );
+console.log("Publishing:", video.public_id);
 
-        const result =
-          await publishVideo(
-            video,
-            accessToken
-          );
+try {
+  const result = await publishVideo(
+    video,
+    accessToken
+  );
 
-        results.push(result);
+  toast.success("Successfully published video");
+  return Response.json({
+    success: true,
+    published: video.public_id,
+    result,
+    remainingVideos: videos.length - 1,
+  });
 
-      } catch (error) {
+} catch (error) {
 
-        console.error(
-          `Failed ${video.public_id}:`,
-          error
-        );
+  console.error(
+    `Failed ${video.public_id}:`,
+    error
+  );
 
-        // IMPORTANT:
-        // Failed video stays in Cloudinary.
+  toast.error("Failed to publish video");
 
-        results.push({
-          success: false,
-
-          cloudinaryPublicId:
-            video.public_id,
-
-          error:
-            error instanceof Error
-              ? error.message
-              : "Unknown error",
-        });
-      }
+  return Response.json(
+    {
+      success: false,
+      cloudinaryPublicId: video.public_id,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unknown error",
+    },
+    {
+      status: 500,
     }
-
-    // ----------------------------------------
-    // FINAL RESULT
-    // ----------------------------------------
-
-    const published =
-      results.filter(
-        (result) =>
-          result.success
-      ).length;
-
-    const failed =
-      results.filter(
-        (result) =>
-          !result.success
-      ).length;
-
-    return Response.json({
-      success: true,
-
-      total:
-        videos.length,
-
-      published,
-
-      failed,
-
-      results,
-    });
+  );
+}
 
   } catch (error) {
-
+    toast.error("Scheduled publishing failed");   
     console.error(
       "Scheduled publishing failed:",
       error

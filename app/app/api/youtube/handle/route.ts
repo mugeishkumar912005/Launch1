@@ -1,3 +1,5 @@
+import { toast } from "sonner";
+
 export async function POST(request: Request) {
   try {
     const { handles } = await request.json();
@@ -61,7 +63,7 @@ export async function POST(request: Request) {
         };
       })
     );
-
+    toast.success("Successfully fetched channels");
     // ONE response after all handles are processed
     return Response.json({
       success: true,
@@ -70,7 +72,7 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error("Channel lookup error:", error);
-
+    toast.error("Failed to get channels");
     return Response.json(
       {
         success: false,

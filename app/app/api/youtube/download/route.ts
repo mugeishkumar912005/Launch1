@@ -2,6 +2,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { unlink } from "fs/promises";
 import cloudinary from "@/lib/cloudinary"; // ← adjust to wherever your cloudinary.ts lives
+import { toast } from "sonner";
 
 export const runtime = "nodejs";
 
@@ -33,7 +34,7 @@ async function downloadAndUpload(video: any) {
   try {
     const result = await cloudinary.uploader.upload(filePath, {
       resource_type: "video", // required — Cloudinary handles video vs image differently
-      folder: "trending-shorts",
+      folder: "Personal",
       public_id: video.videoId,
       overwrite: true,
     });
@@ -164,13 +165,14 @@ export async function POST(request: Request) {
     console.log("Selected trending video:", trendingVideo);
 
     const cloudinaryUrl = await downloadAndUpload(trendingVideo);
-
+    toast.success("Successfully uploaded video to Cloudinary");
     return Response.json({
       success: true,
       video: { ...trendingVideo, cloudinaryUrl },
     });
   } catch (error) {
     console.error("Trending video selection failed:", error);
+    toast.error("Failed to select trending video");
     return Response.json(
       {
         success: false,

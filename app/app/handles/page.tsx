@@ -67,7 +67,7 @@ export default function HandlesPage() {
 
       <button
         onClick={sendHandles}
-        className="rounded-sm bg-black p-2 text-white"
+        className="rounded-sm cursor-pointer bg-black p-2 text-white"
       >
         Submit
       </button>

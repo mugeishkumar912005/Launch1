@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { toast } from "sonner";
 
 export async function GET() {
   const params = new URLSearchParams({
@@ -22,6 +23,8 @@ export async function GET() {
   });
 
   const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  
+  toast.success("successfully connected");
 
   return NextResponse.redirect(url);
 }
