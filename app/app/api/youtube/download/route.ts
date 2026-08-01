@@ -39,7 +39,7 @@ async function downloadAndUpload(video: any) {
       overwrite: true,
     });
     return result.secure_url as string;
-  } finally {
+  } finally { 
     await unlink(filePath).catch(() => {}); // remove the local temp copy
   }
 }
@@ -165,7 +165,7 @@ export async function POST(request: Request) {
     console.log("Selected trending video:", trendingVideo);
 
     const cloudinaryUrl = await downloadAndUpload(trendingVideo);
-    toast.success("Successfully uploaded video to Cloudinary");
+    
     return Response.json({
       success: true,
       video: { ...trendingVideo, cloudinaryUrl },

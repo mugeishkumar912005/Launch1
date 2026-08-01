@@ -63,13 +63,13 @@ export async function POST(request: Request) {
         };
       })
     );
-    toast.success("Successfully fetched channels");
+     
     // ONE response after all handles are processed
     return Response.json({
       success: true,
       channels,
     });
-
+    
   } catch (error) {
     console.error("Channel lookup error:", error);
     toast.error("Failed to get channels");
