@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { unlink } from "fs/promises";
+import { mkdir, writeFile, unlink } from "fs/promises";
 import cloudinary from "@/lib/cloudinary"; // ← adjust to wherever your cloudinary.ts lives
 export const runtime = "nodejs";
 
@@ -16,38 +16,49 @@ function durationToSeconds(duration: string): number {
 }
 
 async function downloadAndUpload(video: any) {
-const { stdout } = await run("yt-dlp", [
-  "--cookies",
-  "cookies/cookies.txt",
+  await mkdir("cookies", { recursive: true });
 
-  video.videoId,
+  await writeFile(
+    "cookies/cookies.txt",
+    process.env.YTDLP_COOKIES!
+  );
 
-  "-o",
-  "downloads/%(id)s.%(ext)s",
+  const { stdout } = await run("yt-dlp", [
+    "--cookies",
+    "cookies/cookies.txt",
 
-  "--no-playlist",
-  "--no-simulate",
+    video.videoId,
 
-  "--print",
-  "after_move:filepath",
+    "-o",
+    "downloads/%(id)s.%(ext)s",
 
-  "--quiet",
-  "--no-warnings",
-]);
+    "--no-playlist",
+    "--no-simulate",
+
+    "--print",
+    "after_move:filepath",
+
+    "--quiet",
+    "--no-warnings",
+  ]);
 
   const filePath = stdout.trim().split("\n").pop()?.trim();
-  if (!filePath) throw new Error("Could not determine downloaded file path");
+
+  if (!filePath) {
+    throw new Error("Could not determine downloaded file path");
+  }
 
   try {
     const result = await cloudinary.uploader.upload(filePath, {
-      resource_type: "video", // required — Cloudinary handles video vs image differently
+      resource_type: "video",
       folder: "Personal",
       public_id: video.videoId,
       overwrite: true,
     });
-    return result.secure_url as string;
-  } finally { 
-    await unlink(filePath).catch(() => {}); // remove the local temp copy
+
+    return result.secure_url;
+  } finally {
+    await unlink(filePath).catch(() => {});
   }
 }
 
