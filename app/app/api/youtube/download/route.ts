@@ -23,22 +23,20 @@ async function downloadAndUpload(video: any) {
     process.env.YTDLP_COOKIES!
   );
 
-  const { stdout } = await run("yt-dlp", [
+const { stdout } = await run("yt-dlp", [
   "--cookies",
   "cookies/cookies.txt",
 
+  "--extractor-args",
+  "youtube:player_client=android",
+
   "-f",
-  "bv*+ba/b",
+  "18",
 
   video.videoId,
 
   "-o",
   "downloads/%(id)s.%(ext)s",
-
-  "--merge-output-format",
-  "mp4",
-
-  "--no-playlist",
 
   "--print",
   "after_move:filepath",
