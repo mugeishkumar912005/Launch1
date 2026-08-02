@@ -16,15 +16,24 @@ function durationToSeconds(duration: string): number {
 }
 
 async function downloadAndUpload(video: any) {
-  const { stdout } = await run("yt-dlp", [
-    video.videoId,
-    "-o", "downloads/%(id)s.%(ext)s",
-    "--no-playlist",
-    "--no-simulate",
-    "--print", "after_move:filepath",
-    "--quiet",
-    "--no-warnings",
-  ]);
+const { stdout } = await run("yt-dlp", [
+  "--cookies",
+  "cookies/cookies.txt",
+
+  video.videoId,
+
+  "-o",
+  "downloads/%(id)s.%(ext)s",
+
+  "--no-playlist",
+  "--no-simulate",
+
+  "--print",
+  "after_move:filepath",
+
+  "--quiet",
+  "--no-warnings",
+]);
 
   const filePath = stdout.trim().split("\n").pop()?.trim();
   if (!filePath) throw new Error("Could not determine downloaded file path");
