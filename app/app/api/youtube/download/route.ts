@@ -24,23 +24,25 @@ async function downloadAndUpload(video: any) {
   );
 
   const { stdout } = await run("yt-dlp", [
-    "--cookies",
-    "cookies/cookies.txt",
+  "--cookies",
+  "cookies/cookies.txt",
 
-    video.videoId,
+  "-f",
+  "bv*+ba/b",
 
-    "-o",
-    "downloads/%(id)s.%(ext)s",
+  video.videoId,
 
-    "--no-playlist",
-    "--no-simulate",
+  "-o",
+  "downloads/%(id)s.%(ext)s",
 
-    "--print",
-    "after_move:filepath",
+  "--merge-output-format",
+  "mp4",
 
-    "--quiet",
-    "--no-warnings",
-  ]);
+  "--no-playlist",
+
+  "--print",
+  "after_move:filepath",
+]);
 
   const filePath = stdout.trim().split("\n").pop()?.trim();
 
