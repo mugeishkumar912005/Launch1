@@ -172,7 +172,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Trending video selection failed:", error);
-    toast.error("Failed to select trending video");
+    
     return Response.json(
       {
         success: false,

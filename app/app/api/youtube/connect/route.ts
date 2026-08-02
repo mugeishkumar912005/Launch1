@@ -23,8 +23,7 @@ export async function GET() {
   });
 
   const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-  
-  toast.success("successfully connected");
+
 
   return NextResponse.redirect(url);
 }

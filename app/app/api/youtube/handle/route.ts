@@ -72,7 +72,6 @@ export async function POST(request: Request) {
     
   } catch (error) {
     console.error("Channel lookup error:", error);
-    toast.error("Failed to get channels");
     return Response.json(
       {
         success: false,

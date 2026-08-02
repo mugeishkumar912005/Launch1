@@ -279,7 +279,7 @@ async function publishVideo(
     video.public_id,
     deleteResult
   );
-  toast.success("Successfully deleted video from Cloudinary");
+ 
   return {
     success: true,
     youtubeVideoId:
@@ -331,7 +331,7 @@ export async function GET() {
       "Cloudinary videos found:",
       videos.length
     );
-    toast.success("Successfully fetched Cloudinary video");
+    
     if (!videos.length) {
       return Response.json({
         success: true,
@@ -355,7 +355,7 @@ try {
     accessToken
   );
 
-  toast.success("Successfully published video");
+  
   return Response.json({
     success: true,
     published: video.public_id,
@@ -370,7 +370,7 @@ try {
     error
   );
 
-  toast.error("Failed to publish video");
+  
 
   return Response.json(
     {
@@ -388,7 +388,6 @@ try {
 }
 
   } catch (error) {
-    toast.error("Scheduled publishing failed");   
     console.error(
       "Scheduled publishing failed:",
       error
