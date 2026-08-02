@@ -4,7 +4,7 @@ import { toast } from "sonner";
 export async function GET() {
   const params = new URLSearchParams({
     client_id: process.env.AUTH_GOOGLE_ID!,
-    redirect_uri: "https://launch-cli.vercel.app/api/youtube/callback",
+    redirect_uri: "https://launch1-production-36e4.up.railway.app/api/youtube/callback",
     response_type: "code",
 
     access_type: "offline",
