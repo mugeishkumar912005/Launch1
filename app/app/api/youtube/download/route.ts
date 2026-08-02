@@ -2,8 +2,6 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { unlink } from "fs/promises";
 import cloudinary from "@/lib/cloudinary"; // ← adjust to wherever your cloudinary.ts lives
-import { toast } from "sonner";
-
 export const runtime = "nodejs";
 
 const run = promisify(execFile);

@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import cloudinary from "@/lib/cloudinary";
-import { toast } from "sonner";
 
 export const runtime = "nodejs";
 

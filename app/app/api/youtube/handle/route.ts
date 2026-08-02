@@ -1,5 +1,3 @@
-import { toast } from "sonner";
-
 export async function POST(request: Request) {
   try {
     const { handles } = await request.json();
