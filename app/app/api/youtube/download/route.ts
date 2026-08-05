@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       cookiesPath = "cookies/cookies.txt";
     }
 
-    const LOOKBACK_DAYS = 60   ;
+    const LOOKBACK_DAYS = 60;
 
     const publishedAfter = new Date(
       Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000
@@ -136,6 +136,10 @@ export async function POST(request: Request) {
       if (!statsData.items?.length) continue;
 
       const ranked = statsData.items
+        // Skip age-restricted (18+) videos before ranking — they need signed-in auth and you don't want to repost them anyway
+        .filter(
+          (v: any) => v.contentDetails?.contentRating?.ytRating !== "ytAgeRestricted"
+        )
         .map((video: any) => {
           const views = Number(video.statistics?.viewCount ?? 0);
           const likes = Number(video.statistics?.likeCount ?? 0);
