@@ -2,6 +2,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { mkdir, writeFile, unlink } from "fs/promises";
 import cloudinary from "@/lib/cloudinary"; // ← adjust to wherever your cloudinary.ts lives
+
 export const runtime = "nodejs";
 
 const run = promisify(execFile);
@@ -15,35 +16,26 @@ function durationToSeconds(duration: string): number {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
-async function downloadAndUpload(video: any) {
-  await mkdir("cookies", { recursive: true });
+async function downloadAndUpload(video: any, cookiesPath?: string) {
+  const args = [
+    "--extractor-args", "youtube:player_client=android",
+    "-f", "18/best[ext=mp4][acodec!=none][vcodec!=none]/best",
+    "--no-playlist",
+    "--no-simulate", // REQUIRED: --print implies --simulate, so without this nothing downloads
+    "--print", "after_move:filepath",
+    "--quiet",
+    "--no-warnings",
+    "-o", "downloads/%(id)s.%(ext)s",
+    video.videoId,
+  ];
 
-  await writeFile(
-    "cookies/cookies.txt",
-    process.env.YTDLP_COOKIES!
-  );
+  if (cookiesPath) {
+    args.unshift("--cookies", cookiesPath);
+  }
 
-const { stdout } = await run("yt-dlp", [
-  "--cookies",
-  "cookies/cookies.txt",
-
-  "--extractor-args",
-  "youtube:player_client=android",
-
-  "-f",
-  "18",
-
-  video.videoId,
-
-  "-o",
-  "downloads/%(id)s.%(ext)s",
-
-  "--print",
-  "after_move:filepath",
-]);
+  const { stdout } = await run("yt-dlp", args);
 
   const filePath = stdout.trim().split("\n").pop()?.trim();
-
   if (!filePath) {
     throw new Error("Could not determine downloaded file path");
   }
@@ -55,8 +47,7 @@ const { stdout } = await run("yt-dlp", [
       public_id: video.videoId,
       overwrite: true,
     });
-
-    return result.secure_url;
+    return result.secure_url as string;
   } finally {
     await unlink(filePath).catch(() => {});
   }
@@ -80,7 +71,19 @@ export async function POST(request: Request) {
       return Response.json({ error: "YOUTUBE_API_KEY is missing" }, { status: 500 });
     }
 
-    const publishedAfter = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    // Write the cookies file once (only if provided); reused for every download this request.
+    let cookiesPath: string | undefined;
+    if (process.env.YTDLP_COOKIES) {
+      await mkdir("cookies", { recursive: true });
+      await writeFile("cookies/cookies.txt", process.env.YTDLP_COOKIES);
+      cookiesPath = "cookies/cookies.txt";
+    }
+
+    const LOOKBACK_DAYS = 14;
+
+    const publishedAfter = new Date(
+      Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
 
     const rankedVideos: any[] = [];
 
@@ -167,30 +170,39 @@ export async function POST(request: Request) {
         })
         .filter((video: any) => video.durationSeconds > 0 && video.durationSeconds <= 180);
 
-      rankedVideos.push(...ranked);
+      const topPerChannel = ranked
+        .sort((a: any, b: any) => b.trendingScore - a.trendingScore)
+        .slice(0, 3);
+
+      rankedVideos.push(...topPerChannel);
     }
 
-    rankedVideos.sort((a: any, b: any) => b.trendingScore - a.trendingScore);
+    rankedVideos.sort((a, b) => b.trendingScore - a.trendingScore);
 
-    if (!rankedVideos.length) {
-      return Response.json(
-        { success: false, error: "No Short candidates found" },
-        { status: 404 }
-      );
+    console.log("Selected videos:", rankedVideos);
+
+    const uploadedVideos = [];
+
+    for (const video of rankedVideos) {
+      try {
+        console.log(`Downloading ${video.title} (${video.trendingScore})`);
+        const cloudinaryUrl = await downloadAndUpload(video, cookiesPath);
+        uploadedVideos.push({ ...video, cloudinaryUrl });
+      } catch (err) {
+        console.error(
+          `Failed for ${video.videoId}:`,
+          err instanceof Error ? err.message : err
+        );
+      }
     }
 
-    const trendingVideo = rankedVideos[0];
-    console.log("Selected trending video:", trendingVideo);
-
-    const cloudinaryUrl = await downloadAndUpload(trendingVideo);
-    
     return Response.json({
       success: true,
-      video: { ...trendingVideo, cloudinaryUrl },
+      total: uploadedVideos.length,
+      videos: uploadedVideos,
     });
   } catch (error) {
     console.error("Trending video selection failed:", error);
-    
     return Response.json(
       {
         success: false,
