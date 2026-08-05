@@ -19,7 +19,7 @@ function durationToSeconds(duration: string): number {
 async function downloadAndUpload(video: any, cookiesPath?: string) {
   const args = [
     "--extractor-args", "youtube:player_client=android",
-    "-f", "best",
+    "-f", "18/best[ext=mp4][acodec!=none][vcodec!=none]/best",
     "--no-playlist",
     "--no-simulate", // REQUIRED: --print implies --simulate, so without this nothing downloads
     "--print", "after_move:filepath",
