@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       cookiesPath = "cookies/cookies.txt";
     }
 
-    const LOOKBACK_DAYS = 14;
+    const LOOKBACK_DAYS = 30   ;
 
     const publishedAfter = new Date(
       Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000
@@ -168,7 +168,7 @@ export async function POST(request: Request) {
             trendingScore: Math.round(trendingScore),
           };
         })
-        .filter((video: any) => video.durationSeconds > 0 && video.durationSeconds <= 180);
+        .filter((video: any) => video.durationSeconds > 0 && video.durationSeconds <= 240);
 
       const topPerChannel = ranked
         .sort((a: any, b: any) => b.trendingScore - a.trendingScore)
