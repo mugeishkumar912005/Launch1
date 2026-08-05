@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       cookiesPath = "cookies/cookies.txt";
     }
 
-    const LOOKBACK_DAYS = 30   ;
+    const LOOKBACK_DAYS = 60   ;
 
     const publishedAfter = new Date(
       Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000
