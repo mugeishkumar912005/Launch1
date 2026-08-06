@@ -2,6 +2,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { mkdir, writeFile, unlink } from "fs/promises";
 import cloudinary from "@/lib/cloudinary"; // ← adjust to wherever your cloudinary.ts lives
+import { rewriteMetadata } from "../../Ai/rewritter";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,7 @@ async function downloadAndUpload(video: any, cookiesPath?: string) {
     "--quiet",
     "--no-warnings",
     "-o", "downloads/%(id)s.%(ext)s",
+    "--",
     video.videoId,
   ];
 
@@ -41,11 +43,21 @@ async function downloadAndUpload(video: any, cookiesPath?: string) {
   }
 
   try {
+    console.log("Rewriting Metadata...");
+    const {title, description} = await rewriteMetadata({
+      title: video.title,
+      description: video.description,
+    });
+
+    console.log("Rewritten Metadata:", { title, description } , video.tags);
     const result = await cloudinary.uploader.upload(filePath, {
       resource_type: "video",
       folder: "Personal",
       public_id: video.videoId,
       overwrite: true,
+
+      display_name: title,
+      context: `title=${title}|description=${description}|tags=${video.tags.join(",")}`
     });
     return result.secure_url as string;
   } finally {
@@ -156,6 +168,7 @@ export async function POST(request: Request) {
             videoId: video.id,
             title: video.snippet.title,
             description: video.snippet.description,
+            tags: video.snippet.tags ?? [],
             publishedAt: video.snippet.publishedAt,
             channelName: video.snippet.channelTitle,
             thumbnail:

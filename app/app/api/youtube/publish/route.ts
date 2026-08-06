@@ -133,7 +133,7 @@ async function publishVideo(
 
   if (!cloudResponse.ok) {
     throw new Error(
-      `Failed to fetch ${video.public_id} from Cloudinary`
+      `Failed to fetch ${video.public_id}(${video.context.custom.title} , ${video.context.custom.description}) from Cloudinary`
     );
   }
 
@@ -182,7 +182,7 @@ async function publishVideo(
               .pop() ||
             "Untitled Video",
 
-          description: "",
+          description: video.context.custom.description,
         },
 
         status: {
@@ -316,7 +316,7 @@ export async function GET() {
         resource_type: "video",
         type: "upload",
       
-
+        context: true,
         prefix:
           "Personal/",
 
