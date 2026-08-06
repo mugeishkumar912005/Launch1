@@ -1,8 +1,5 @@
 import Groq from "groq-sdk";
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY!,
-});
 
 export interface MetadataInput {
   title: string;
@@ -13,6 +10,10 @@ export async function rewriteMetadata({
   title,
   description,
 }: MetadataInput) {
+  const groq = new Groq({
+      apiKey: process.env.GROQ_API_KEY!,
+  });
+
   const completion = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile", 
     temperature: 0.7,
@@ -32,7 +33,7 @@ export async function rewriteMetadata({
         - Keep the title under 100 characters.
         - Improve the description for readability and SEO.
         - Do NOT add hashtags.
-        - generate tags.
+        - Do NOT generate tags.
         - Do NOT invent facts.
         - Return ONLY valid JSON.
 
