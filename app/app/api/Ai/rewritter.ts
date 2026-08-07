@@ -32,8 +32,9 @@ export async function rewriteMetadata({
         - Make the title compelling but not clickbait.
         - Keep the title under 100 characters.
         - Improve the description for readability and SEO.
-        - Do NOT add hashtags.
-        - Do NOT generate tags.
+        - add only youtube trending tags that make the video perform better.
+        - add hashtags.
+        - generate tags.
         - Do NOT invent facts.
         - Return ONLY valid JSON.
 
