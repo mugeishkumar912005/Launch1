@@ -2,7 +2,7 @@ import cron from "node-cron";
 
 console.log("Cron scheduler started");
 
-cron.schedule("*/20 * * * *", async () => {
+cron.schedule("0 * * * *", async () => {
   console.log("Running publish job at", new Date().toISOString());
 
   try {
